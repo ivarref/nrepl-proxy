@@ -13,25 +13,30 @@
 
 (defonce session->stream (atom {}))
 
-(defn close-handler [{:keys [endpoint]} s info open? session-id]
+(defn opts->extra-headers [{:keys [secret-header secret-file secret-prefix]}]
+  {secret-header (str secret-prefix (str/trim (slurp secret-file)))})
+
+(defn close-handler [{:keys [endpoint] :as opts} s info open? session-id]
   (log/info "connection closed for" session-id)
   (reset! open? false)
   (try
     (client/post endpoint
                  {:form-params      {:op         "close"
                                      :session-id session-id}
+                  :headers          (opts->extra-headers opts)
                   :as               :json
                   :throw-exceptions false
                   :content-type     :json})
     (catch Throwable t
       (log/debug t "failed to close remote"))))
 
-(defn consume-handler [{:keys [endpoint]} s info session-id arg]
+(defn consume-handler [{:keys [endpoint] :as opts} s info session-id arg]
   (log/debug "consume" arg)
   (client/post endpoint
                {:form-params  {:op         "send"
                                :session-id session-id
                                :payload    (bytes->base64-str arg)}
+                :headers      (opts->extra-headers opts)
                 :as           :json
                 :content-type :json}))
 
@@ -40,6 +45,7 @@
     (let [payload (->> (client/post endpoint
                                     {:form-params  {:op         "recv"
                                                     :session-id session-id}
+                                     :headers      (opts->extra-headers opts)
                                      :as           :json
                                      :content-type :json})
                        :body
@@ -79,6 +85,7 @@
   (log/info "starting new connection...")
   (let [session-id (->> (client/post endpoint
                                      {:form-params  {:op "init"}
+                                      :headers      (opts->extra-headers opts)
                                       :as           :json
                                       :content-type :json})
                         :body
@@ -100,14 +107,23 @@
       (log/debug "poller exiting" session-id))))
 
 (defn start-server
-  [{:keys [bind port endpoint]
-    :or   {bind "127.0.0.1"
-           port 7777}
+  [{:keys [bind port endpoint secret-header secret-file secret-prefix]
+    :or   {bind          "127.0.0.1"
+           port          7777
+           secret-header "authorization"
+           secret-file   ".secret"
+           secret-prefix ""}
     :as   opts}]
-  (assert (string? endpoint) "must be given :endpoint!")
-  (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
-  (log/info "started proxy server on" bind ":" port)
-  @(promise))
+  (let [opts (assoc opts
+               :bind bind
+               :port port
+               :secret-header secret-header
+               :secret-file secret-file
+               :secret-prefix secret-prefix)]
+    (assert (string? endpoint) "must be given :endpoint!")
+    (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
+    (log/info "started proxy server on" bind ":" port)
+    @(promise)))
 
 
 

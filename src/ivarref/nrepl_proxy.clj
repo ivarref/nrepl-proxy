@@ -13,8 +13,10 @@
 
 (defonce session->stream (atom {}))
 
-(defn opts->extra-headers [{:keys [secret-header secret-file secret-prefix]}]
-  {secret-header (str secret-prefix (str/trim (slurp secret-file)))})
+(defn opts->extra-headers [{:keys [secret-header secret-value secret-file secret-prefix]}]
+  {secret-header (str secret-prefix
+                      (or secret-value
+                          (str/trim (slurp secret-file))))})
 
 (defn close-handler [{:keys [endpoint] :as opts} s info open? session-id]
   (log/info "connection closed for" session-id)
@@ -107,11 +109,18 @@
       (log/debug "poller exiting" session-id))))
 
 (defn start-server
-  [{:keys [bind port endpoint secret-header secret-file secret-prefix]
+  [{:keys [bind
+           port
+           endpoint
+           secret-header
+           secret-file
+           secret-value
+           secret-prefix]
     :or   {bind          "127.0.0.1"
            port          7777
            secret-header "authorization"
            secret-file   ".secret"
+           secret-value  nil
            secret-prefix ""}
     :as   opts}]
   (let [opts (assoc opts
@@ -119,6 +128,7 @@
                :port port
                :secret-header secret-header
                :secret-file secret-file
+               :secret-value secret-value
                :secret-prefix secret-prefix)]
     (assert (string? endpoint) "must be given :endpoint!")
     (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})

@@ -104,7 +104,7 @@
           (Thread/sleep 100)
           (catch Throwable t
             (log/warn "error while polling:" (.getMessage t))
-            ;(def tt t)
+            (log/warn "error of class" (class t))
             (Thread/sleep 500))))
       (log/debug "poller exiting" session-id))))
 

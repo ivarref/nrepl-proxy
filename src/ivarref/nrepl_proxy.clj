@@ -34,13 +34,19 @@
 
 (defn consume-handler [{:keys [endpoint] :as opts} s info session-id arg]
   (log/debug "consume" arg)
-  (client/post endpoint
-               {:form-params  {:op         "send"
-                               :session-id session-id
-                               :payload    (bytes->base64-str arg)}
-                :headers      (opts->extra-headers opts)
-                :as           :json
-                :content-type :json}))
+  (try
+    (client/post endpoint
+                 {:form-params  {:op         "send"
+                                 :session-id session-id
+                                 :payload    (bytes->base64-str arg)}
+                  :headers      (opts->extra-headers opts)
+                  :as           :json
+                  :content-type :json})
+    (catch Throwable t
+      (if (some->> (ex-data t) :status (= 502))
+        (do (log/warn "got 502 bad gateway on send")
+            nil)
+        (throw t)))))
 
 (defn poll [{:keys [endpoint] :as opts} s info open? session-id start-poll-time]
   (try

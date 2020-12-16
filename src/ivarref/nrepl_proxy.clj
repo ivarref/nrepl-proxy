@@ -56,7 +56,7 @@
         (log/debug "got data..")
         (doseq [line (str/split-lines payload)]
           (stream/put! s (.decode (Base64/getDecoder) ^String line)))))
-    (catch Exception e
+    (catch Throwable e
       (cond (false? @open?)
             (do (log/debug "expected close"))
 
@@ -68,7 +68,8 @@
 
             (or (instance? ConnectException e)
                 (instance? NoHttpResponseException e)
-                (instance? SocketException e))
+                (instance? SocketException e)
+                (some->> e (ex-data) :status (= 502)))
             (let [ms-since-error (- (System/currentTimeMillis) start-poll-time)]
               (cond
                 (>= ms-since-error 60000)
@@ -104,7 +105,7 @@
           (Thread/sleep 100)
           (catch Throwable t
             (log/warn "error while polling:" (.getMessage t))
-            (log/warn "error of class" (class t))
+            (def tt t)
             (Thread/sleep 500))))
       (log/debug "poller exiting" session-id))))
 
@@ -115,13 +116,15 @@
            secret-header
            secret-file
            secret-value
-           secret-prefix]
+           secret-prefix
+           block?]
     :or   {bind          "127.0.0.1"
            port          7777
            secret-header "authorization"
            secret-file   ".secret"
            secret-value  nil
-           secret-prefix ""}
+           secret-prefix ""
+           block?        true}
     :as   opts}]
   (let [opts (assoc opts
                :bind bind
@@ -133,7 +136,12 @@
     (assert (string? endpoint) "must be given :endpoint!")
     (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
     (log/info "started proxy server on" (str bind "@" port))
-    @(promise)))
+    (when block?
+      @(promise))))
 
-
-
+(comment
+  (start-server
+    {:endpoint      (str/trim (slurp ".nrepl-url"))
+     :secret-header "nrepl-token"
+     :secret-file   ".nrepl-token"
+     :block? false}))

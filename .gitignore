@@ -1,3 +1,5 @@
 .nrepl-port
 *.iml
 .idea/
+.nrepl-token
+.nrepl-url

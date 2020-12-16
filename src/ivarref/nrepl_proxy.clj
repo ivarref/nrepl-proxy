@@ -19,7 +19,7 @@
                           (str/trim (slurp secret-file))))})
 
 (defn close-handler [{:keys [endpoint] :as opts} s info open? session-id]
-  (log/info "connection closed for" session-id)
+  (log/info "connection closed")
   (reset! open? false)
   (try
     (client/post endpoint
@@ -93,7 +93,7 @@
                         :body
                         :session-id)
         open? (atom true)]
-    (log/info "new connection established" session-id)
+    (log/info "new connection established")
     (swap! session->stream assoc session-id s)
     (stream/on-closed s (fn [& _] (close-handler opts s info open? session-id)))
     (stream/consume (fn [arg] (consume-handler opts s info session-id arg)) s)
@@ -132,7 +132,7 @@
                :secret-prefix secret-prefix)]
     (assert (string? endpoint) "must be given :endpoint!")
     (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
-    (log/info "started proxy server on" bind ":" port)
+    (log/info "started proxy server on" (str bind "@" port))
     @(promise)))
 
 

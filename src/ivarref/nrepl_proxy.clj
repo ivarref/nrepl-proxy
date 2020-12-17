@@ -30,7 +30,11 @@
                   :throw-exceptions false
                   :content-type     :json})
     (catch Throwable t
-      (log/debug t "failed to close remote"))))
+      (log/debug t "failed to close remote")))
+  (try
+    (.close s)
+    (catch Throwable t
+      (log/debug t "failed to close local connection"))))
 
 (defn consume-handler [{:keys [endpoint] :as opts} s info session-id arg]
   (log/debug "consume" arg)
@@ -111,8 +115,9 @@
           (Thread/sleep 100)
           (catch Throwable t
             (log/warn "error while polling:" (.getMessage t))
-            (def tt t)
+            ;(def tt t)
             (Thread/sleep 500))))
+      (close-handler opts s info open? session-id)
       (log/debug "poller exiting" session-id))))
 
 (defn start-server

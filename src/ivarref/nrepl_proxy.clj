@@ -37,6 +37,12 @@
     (catch Throwable t
       (log/debug t "failed to close local connection"))))
 
+(defn gateway-error? [t]
+  (when t
+    (when-let [status (some->> (ex-data t) :status)]
+      (when (contains? #{502 504} status)
+        status))))
+
 (defn consume-handler [{:keys [endpoint] :as opts} s info session-id arg]
   (log/debug "consume" arg)
   (try
@@ -48,8 +54,8 @@
                   :as           :json
                   :content-type :json})
     (catch Throwable t
-      (if (some->> (ex-data t) :status (= 502))
-        (do (log/warn "got 502 bad gateway on send")
+      (if-let [err (gateway-error? t)]
+        (do (log/warn "got gateway error code" err "on send")
             nil)
         (throw t)))))
 
@@ -86,7 +92,7 @@
             (or (instance? ConnectException e)
                 (instance? NoHttpResponseException e)
                 (instance? SocketException e)
-                (some->> e (ex-data) :status (= 502)))
+                (gateway-error? e))
             (let [ms-since-error (- (System/currentTimeMillis) start-poll-time)]
               (cond
                 (>= ms-since-error (* 1000 give-up-seconds))

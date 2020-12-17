@@ -19,7 +19,8 @@
                           (str/trim (slurp secret-file))))})
 
 (defn close-handler [{:keys [endpoint] :as opts} s info open? session-id]
-  (log/info "connection closed")
+  (when-not (stream/closed? s)
+    (log/info "connection closed"))
   (reset! open? false)
   (try
     (client/post endpoint
@@ -52,7 +53,13 @@
             nil)
         (throw t)))))
 
-(defn poll [{:keys [endpoint] :as opts} s info open? session-id start-poll-time]
+(defn poll [{:keys [endpoint give-up-seconds]
+             :as   opts}
+            s
+            info
+            open?
+            session-id
+            start-poll-time]
   (try
     (let [payload (->> (client/post endpoint
                                     {:form-params  {:op         "recv"
@@ -82,7 +89,7 @@
                 (some->> e (ex-data) :status (= 502)))
             (let [ms-since-error (- (System/currentTimeMillis) start-poll-time)]
               (cond
-                (>= ms-since-error 60000)
+                (>= ms-since-error (* 1000 give-up-seconds))
                 (do (log/error "server seems to be down, giving up...!")
                     (reset! open? false)
                     ::abort)
@@ -128,14 +135,16 @@
            secret-file
            secret-value
            secret-prefix
-           block?]
-    :or   {bind          "127.0.0.1"
-           port          7777
-           secret-header "authorization"
-           secret-file   ".secret"
-           secret-value  nil
-           secret-prefix ""
-           block?        true}
+           block?
+           give-up-seconds]
+    :or   {bind            "127.0.0.1"
+           port            7777
+           secret-header   "authorization"
+           secret-file     ".secret"
+           secret-value    nil
+           secret-prefix   ""
+           block?          true
+           give-up-seconds 60}
     :as   opts}]
   (let [opts (assoc opts
                :bind bind
@@ -143,7 +152,8 @@
                :secret-header secret-header
                :secret-file secret-file
                :secret-value secret-value
-               :secret-prefix secret-prefix)]
+               :secret-prefix secret-prefix
+               :give-up-seconds give-up-seconds)]
     (assert (string? endpoint) "must be given :endpoint!")
     (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
     (log/info "started proxy server on" (str bind "@" port))
@@ -152,7 +162,8 @@
 
 (comment
   (start-server
-    {:endpoint      (str/trim (slurp ".nrepl-url"))
-     :secret-header "nrepl-token"
-     :secret-file   ".nrepl-token"
-     :block? false}))
+    {:endpoint        (str/trim (slurp ".nrepl-url"))
+     :secret-header   "nrepl-token"
+     :secret-file     ".nrepl-token"
+     :give-up-seconds 10
+     :block?          false}))

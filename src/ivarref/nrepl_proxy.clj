@@ -59,7 +59,9 @@
             nil)
         (throw t)))))
 
-(defn poll [{:keys [endpoint give-up-seconds]
+(defn poll [{:keys [endpoint
+                    give-up-seconds
+                    warn-after-seconds]
              :as   opts}
             s
             info
@@ -99,7 +101,7 @@
                 (do (log/error "server seems to be down, giving up...!")
                     (reset! open? false)
                     ::abort)
-                (>= ms-since-error 5000)
+                (>= ms-since-error (* 1000 warn-after-seconds))
                 (log/warn "server is down for" (int (/ ms-since-error 1000)) "seconds"))
               (Thread/sleep 1000)
               (poll opts s info open? session-id start-poll-time))
@@ -142,15 +144,17 @@
            secret-value
            secret-prefix
            block?
-           give-up-seconds]
-    :or   {bind            "127.0.0.1"
-           port            7777
-           secret-header   "authorization"
-           secret-file     ".secret"
-           secret-value    nil
-           secret-prefix   ""
-           block?          true
-           give-up-seconds 60}
+           give-up-seconds
+           warn-after-seconds]
+    :or   {bind               "127.0.0.1"
+           port               7777
+           secret-header      "authorization"
+           secret-file        ".secret"
+           secret-value       nil
+           secret-prefix      ""
+           block?             true
+           give-up-seconds    60
+           warn-after-seconds 5}
     :as   opts}]
   (let [opts (assoc opts
                :bind bind
@@ -159,7 +163,8 @@
                :secret-file secret-file
                :secret-value secret-value
                :secret-prefix secret-prefix
-               :give-up-seconds give-up-seconds)]
+               :give-up-seconds give-up-seconds
+               :warn-after-seconds warn-after-seconds)]
     (assert (string? endpoint) "must be given :endpoint!")
     (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
     (log/info "started proxy server on" (str bind "@" port))

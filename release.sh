@@ -2,7 +2,7 @@
 
 set -ex
 
-clojure -A:jar
+clojure -M:jar
 
 COMMIT_COUNT="$(git rev-list --count HEAD)"
 let "NEXT_PATCH=COMMIT_COUNT+1"
@@ -19,4 +19,6 @@ git commit -m "Release $NEW_VERSION"
 git tag -a $NEW_VERSION -m "Release $NEW_VERSION"
 git push --follow-tags
 
-clojure -A:deploy
+clojure -M:deploy
+
+echo "Released $NEW_VERSION!"

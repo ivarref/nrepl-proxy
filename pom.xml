@@ -4,7 +4,7 @@
   <packaging>jar</packaging>
   <groupId>ivarref</groupId>
   <artifactId>nrepl-proxy</artifactId>
-  <version>0.1.17</version><!-- VERSION -->
+  <version>0.1.19</version><!-- VERSION -->
   <name>nrepl-proxy</name>
   <dependencies>
     <dependency>

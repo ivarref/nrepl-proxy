@@ -21,4 +21,4 @@ git push --follow-tags
 
 clojure -M:deploy
 
-echo "Released $NEW_VERSION!"
+echo "Released $RAW_VERSION!"

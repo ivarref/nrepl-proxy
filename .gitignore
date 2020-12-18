@@ -5,3 +5,4 @@
 .nrepl-url
 .cpcache/
 target/
+*.asc

@@ -11,4 +11,4 @@
 
            :deploy {:extra-deps {slipset/deps-deploy {:mvn/version "0.1.3"}}
                     :main-opts  ["-m" "deps-deploy.deps-deploy" "deploy"
-                                 "target/nrepl_proxy.jar"]}}}
+                                 "target/nrepl_proxy.jar" "true"]}}}

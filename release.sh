@@ -7,9 +7,9 @@ clojure -M:jar
 COMMIT_COUNT="$(git rev-list --count HEAD)"
 let "NEXT_PATCH=COMMIT_COUNT+1"
 
-sed -i 's|<version>\(.*\..*\.\).*</version>\(<!-- VERSION -->\)|<version>\1'$NEXT_PATCH'</version>\2|' pom.xml
+sed -i 's|^  <version>\(.*\..*\.\).*</version>$|  <version>\1'$NEXT_PATCH'</version>|' pom.xml
 
-RAW_VERSION="$(grep "VERSION -->" pom.xml | sed 's|^.*<version>\(.*\)</version>.*$|\1|')"
+RAW_VERSION="$(grep "^  <version>" pom.xml | sed 's|^.*<version>\(.*\)</version>.*$|\1|')"
 
 NEW_VERSION="v$RAW_VERSION"
 echo "Releasing >$NEW_VERSION< ..."

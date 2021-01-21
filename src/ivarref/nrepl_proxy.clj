@@ -4,6 +4,7 @@
             [clojure.tools.logging :as log]
             [clj-http.client :as client]
             [clojure.string :as str]
+            [clojure.pprint :as pprint]
             [aleph.netty :as netty])
   (:import (java.net InetSocketAddress SocketException ConnectException SocketException)
            (java.util Base64)
@@ -112,15 +113,17 @@
 
 (defn handler [{:keys [endpoint] :as opts} s info]
   (log/info "starting new connection ...")
-  (let [resp (client/post endpoint
+  (let [headers (opts->extra-headers opts)
+        resp (client/post endpoint
                           {:form-params  {:op "init"}
-                           :headers      (opts->extra-headers opts)
+                           :headers      headers
                            :as           :json
                            :content-type :json
                            :throw-exceptions false})]
     (if-not (= 200 (:status resp))
       (do (log/error "got http status code" (:status resp) "when trying to establish connection")
           (log/error "body was:\n" (:body resp))
+          (log/error "request headers were:\n" (with-out-str (pprint/pprint headers)))
           (stream/close! s))
       (let [session-id (->> resp
                             :body

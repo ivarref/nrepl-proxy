@@ -111,14 +111,14 @@
             :else
             (throw e)))))
 
-(defn handler [{:keys [endpoint] :as opts} s info]
+(defn handler [{:keys [endpoint poll-delay] :as opts} s info]
   (log/info "starting new connection ...")
   (let [headers (opts->extra-headers opts)
         resp (client/post endpoint
-                          {:form-params  {:op "init"}
-                           :headers      headers
-                           :as           :json
-                           :content-type :json
+                          {:form-params      {:op "init"}
+                           :headers          headers
+                           :as               :json
+                           :content-type     :json
                            :throw-exceptions false})]
     (if-not (= 200 (:status resp))
       (do (log/error "got http status code" (:status resp) "when trying to establish connection")
@@ -137,7 +137,7 @@
           (while @open?
             (try
               (poll opts s info open? session-id (System/currentTimeMillis))
-              (Thread/sleep 100)
+              (Thread/sleep poll-delay)
               (catch Throwable t
                 (log/warn "error while polling:" (.getMessage t))
                 ;(def tt t)
@@ -156,7 +156,8 @@
            block?
            give-up-seconds
            warn-after-seconds
-           port-file]
+           port-file
+           poll-delay]
     :or   {bind               "127.0.0.1"
            port               0
            secret-header      "authorization"
@@ -166,7 +167,8 @@
            block?             true
            give-up-seconds    60
            warn-after-seconds 5
-           port-file          ".nrepl-proxy-port"}
+           port-file          ".nrepl-proxy-port"
+           poll-delay         100}
     :as   opts}]
   (let [opts (assoc opts
                :bind bind
@@ -177,7 +179,8 @@
                :secret-prefix secret-prefix
                :give-up-seconds give-up-seconds
                :warn-after-seconds warn-after-seconds
-               :port-file port-file)]
+               :port-file port-file
+               :poll-delay poll-delay)]
     (assert (string? endpoint) "must be given :endpoint!")
     (let [server (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})]
       (log/info "started proxy server on" (str bind "@" (netty/port server)))

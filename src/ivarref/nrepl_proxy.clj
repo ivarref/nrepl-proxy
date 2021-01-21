@@ -3,7 +3,8 @@
             [manifold.stream :as stream]
             [clojure.tools.logging :as log]
             [clj-http.client :as client]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [aleph.netty :as netty])
   (:import (java.net InetSocketAddress SocketException ConnectException SocketException)
            (java.util Base64)
            (org.apache.http NoHttpResponseException)))
@@ -145,16 +146,18 @@
            secret-prefix
            block?
            give-up-seconds
-           warn-after-seconds]
+           warn-after-seconds
+           port-file]
     :or   {bind               "127.0.0.1"
-           port               7777
+           port               0
            secret-header      "authorization"
            secret-file        ".secret"
            secret-value       nil
            secret-prefix      ""
            block?             true
            give-up-seconds    60
-           warn-after-seconds 5}
+           warn-after-seconds 5
+           port-file          ".nrepl-proxy-port"}
     :as   opts}]
   (let [opts (assoc opts
                :bind bind
@@ -164,12 +167,24 @@
                :secret-value secret-value
                :secret-prefix secret-prefix
                :give-up-seconds give-up-seconds
-               :warn-after-seconds warn-after-seconds)]
+               :warn-after-seconds warn-after-seconds
+               :port-file port-file)]
     (assert (string? endpoint) "must be given :endpoint!")
-    (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})
-    (log/info "started proxy server on" (str bind "@" port))
-    (when block?
-      @(promise))))
+    (let [server (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})]
+      (log/info "started proxy server on" (str bind "@" (netty/port server)))
+      (spit port-file (netty/port server))
+      (log/info "wrote port to" port-file)
+      (.addShutdownHook
+        (Runtime/getRuntime)
+        (Thread.
+          ^Runnable (fn []
+                      (try
+                        (log/info "shutting down server")
+                        (.close server)
+                        (catch Throwable t
+                          (log/warn t "error during closing server"))))))
+      (when block?
+        @(promise)))))
 
 (comment
   (start-server

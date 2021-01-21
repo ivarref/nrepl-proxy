@@ -6,3 +6,4 @@
 .cpcache/
 target/
 *.asc
+.nrepl-proxy-port

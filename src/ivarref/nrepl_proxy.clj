@@ -119,7 +119,7 @@
                            :content-type :json
                            :throw-exceptions false})]
     (if-not (= 200 (:status resp))
-      (do (log/error "got status" (:status resp) "when trying to establish connection")
+      (do (log/error "got http status code" (:status resp) "when trying to establish connection")
           (log/error "body was:\n" (:body resp))
           (stream/close! s))
       (let [session-id (->> resp

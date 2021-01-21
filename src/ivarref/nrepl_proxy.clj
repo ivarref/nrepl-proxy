@@ -111,30 +111,36 @@
             (throw e)))))
 
 (defn handler [{:keys [endpoint] :as opts} s info]
-  (log/info "starting new connection...")
-  (let [session-id (->> (client/post endpoint
-                                     {:form-params  {:op "init"}
-                                      :headers      (opts->extra-headers opts)
-                                      :as           :json
-                                      :content-type :json})
-                        :body
-                        :session-id)
-        open? (atom true)]
-    (log/info "new connection established")
-    (swap! session->stream assoc session-id s)
-    (stream/on-closed s (fn [& _] (close-handler opts s info open? session-id)))
-    (stream/consume (fn [arg] (consume-handler opts s info session-id arg)) s)
-    (future
-      (while @open?
-        (try
-          (poll opts s info open? session-id (System/currentTimeMillis))
-          (Thread/sleep 100)
-          (catch Throwable t
-            (log/warn "error while polling:" (.getMessage t))
-            ;(def tt t)
-            (Thread/sleep 500))))
-      (close-handler opts s info open? session-id)
-      (log/debug "poller exiting" session-id))))
+  (log/info "starting new connection ...")
+  (let [resp (client/post endpoint
+                          {:form-params  {:op "init"}
+                           :headers      (opts->extra-headers opts)
+                           :as           :json
+                           :content-type :json
+                           :throw-exceptions false})]
+    (if-not (= 200 (:status resp))
+      (do (log/error "got status" (:status resp) "when trying to establish connection")
+          (log/error "body was:\n" (:body resp))
+          (stream/close! s))
+      (let [session-id (->> resp
+                            :body
+                            :session-id)
+            open? (atom true)]
+        (log/info "new connection established")
+        (swap! session->stream assoc session-id s)
+        (stream/on-closed s (fn [& _] (close-handler opts s info open? session-id)))
+        (stream/consume (fn [arg] (consume-handler opts s info session-id arg)) s)
+        (future
+          (while @open?
+            (try
+              (poll opts s info open? session-id (System/currentTimeMillis))
+              (Thread/sleep 100)
+              (catch Throwable t
+                (log/warn "error while polling:" (.getMessage t))
+                ;(def tt t)
+                (Thread/sleep 500))))
+          (close-handler opts s info open? session-id)
+          (log/debug "poller exiting" session-id))))))
 
 (defn start-server
   [{:keys [bind
@@ -172,8 +178,9 @@
     (assert (string? endpoint) "must be given :endpoint!")
     (let [server (tcp/start-server (fn [s info] (handler opts s info)) {:socket-address (InetSocketAddress. ^String bind ^Integer port)})]
       (log/info "started proxy server on" (str bind "@" (netty/port server)))
+      (log/info "using remote endpoint" endpoint)
       (spit port-file (netty/port server))
-      (log/info "wrote port to" port-file)
+      (log/info "wrote port" (netty/port server) "to" port-file)
       (.addShutdownHook
         (Runtime/getRuntime)
         (Thread.

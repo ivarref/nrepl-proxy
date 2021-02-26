@@ -29,3 +29,6 @@ clojure -M:deploy
 cd backend && clojure -M:deploy && cd ..
 
 echo "Released $NEW_VERSION!"
+
+rm *.pom.asc
+rm backend/*.pom.asc

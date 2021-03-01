@@ -18,29 +18,34 @@
         headers {secret-header   (str/trim (slurp secret-file))
                  "connection-id" connection-id
                  "remote-host"   (str remote-host)
-                 "remote-port"   (str remote-port)}
-        ws @(http/websocket-client endpoint {:headers headers})]
-    (let [conns (swap! num-connections inc)]
-      (log/info "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
-    (s/on-closed
-      local-sock
-      (fn [& args]
-        (let [conns (swap! num-connections dec)]
-          (log/info "Closing connection! Total number of connections:" conns))
-        (s/close! ws)))
-    (s/on-closed
-      ws
-      (fn [& args]
-        (log/info "WebSocket closed.")
-        (log/info "Closing remote ...")
-        (try
-          @(http/get (str/replace endpoint #"^ws" "http") {:headers (assoc headers :destroy-connection "true")})
-          (log/info "Closing remote ... OK!")
-          (catch Throwable t
-            (log/warn t "Closing remote failed")))
-        (s/close! local-sock)))
-    (s/connect ws local-sock)
-    (s/connect local-sock ws)))
+                 "remote-port"   (str remote-port)}]
+    (when-let [ws (try
+                    @(http/websocket-client endpoint {:headers headers})
+                    (catch Throwable t
+                      (log/error "error during websocket creation:" (ex-message t))
+                      (s/close! local-sock)
+                      nil))]
+      (let [conns (swap! num-connections inc)]
+        (log/info "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
+      (s/on-closed
+        local-sock
+        (fn [& args]
+          (let [conns (swap! num-connections dec)]
+            (log/info "Closing connection! Total number of connections:" conns))
+          (s/close! ws)))
+      (s/on-closed
+        ws
+        (fn [& args]
+          (log/info "WebSocket closed.")
+          (log/info "Closing remote ...")
+          (try
+            @(http/get (str/replace endpoint #"^ws" "http") {:headers (assoc headers :destroy-connection "true")})
+            (log/info "Closing remote ... OK!")
+            (catch Throwable t
+              (log/warn "Closing remote failed:" (ex-message t))))
+          (s/close! local-sock)))
+      (s/connect ws local-sock)
+      (s/connect local-sock ws))))
 
 (defn make-server [{:keys [bind]
                     :as   opts}

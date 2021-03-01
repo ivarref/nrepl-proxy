@@ -38,12 +38,6 @@
         (fn [& args]
           (let [conns (swap! num-connections dec)]
             (log/info "Closing connection ... Total number of connections:" conns))
-          (log/info connection-id "Closing remote ...")
-          (try
-            @(http/get (str/replace endpoint #"^ws" "http") {:headers (assoc headers :destroy-connection "true")})
-            (log/info "Closing remote ... OK!")
-            (catch Throwable t
-              (log/warn "Closing remote failed:" (ex-message t))))
           (s/close! ws)))
 
       (s/consume

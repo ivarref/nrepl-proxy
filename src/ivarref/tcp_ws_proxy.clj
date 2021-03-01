@@ -26,7 +26,7 @@
                       (s/close! local-sock)
                       nil))]
       (let [conns (swap! num-connections inc)]
-        (log/info connection-id "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
+        (log/info "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
 
       (s/on-closed
         ws
@@ -37,13 +37,13 @@
         local-sock
         (fn [& args]
           (let [conns (swap! num-connections dec)]
-            (log/info connection-id "Closing connection ... Total number of connections:" conns))
+            (log/info "Closing connection ... Total number of connections:" conns))
           (log/info connection-id "Closing remote ...")
           (try
             @(http/get (str/replace endpoint #"^ws" "http") {:headers (assoc headers :destroy-connection "true")})
-            (log/info connection-id "Closing remote ... OK!")
+            (log/info "Closing remote ... OK!")
             (catch Throwable t
-              (log/warn connection-id "Closing remote failed:" (ex-message t))))
+              (log/warn "Closing remote failed:" (ex-message t))))
           (s/close! ws)))
 
       (s/consume
@@ -66,17 +66,7 @@
     (log/info "Started proxy server on" (str bind "@" (netty/port server)))
     server))
 
-(defn add-shutdown-hook! [servers]
-  (.addShutdownHook
-    (Runtime/getRuntime)
-    (Thread.
-      ^Runnable (fn []
-                  (doseq [server servers]
-                    (try
-                      (log/info "shutting down server")
-                      (.close server)
-                      (catch Throwable t
-                        (log/warn t "error during closing server"))))))))
+(declare add-shutdown-hook!)
 
 (defn start-server
   [{:keys [bind
@@ -102,3 +92,16 @@
     (add-shutdown-hook! servers)
     (when block?
       @(promise))))
+
+(defn add-shutdown-hook! [servers]
+  (.addShutdownHook
+    (Runtime/getRuntime)
+    (Thread.
+      ^Runnable
+      (fn []
+        (doseq [server servers]
+          (try
+            (log/info "shutting down server")
+            (.close server)
+            (catch Throwable t
+              (log/warn t "error during closing server"))))))))

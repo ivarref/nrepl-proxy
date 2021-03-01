@@ -26,25 +26,35 @@
                       (s/close! local-sock)
                       nil))]
       (let [conns (swap! num-connections inc)]
-        (log/info "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
+        (log/info connection-id "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
+
+      (s/on-closed
+        ws
+        (fn [& args]
+          (s/close! local-sock)))
+
       (s/on-closed
         local-sock
         (fn [& args]
           (let [conns (swap! num-connections dec)]
-            (log/info connection-id "Closing connection! Total number of connections:" conns))
-          (s/close! ws)))
-      (s/on-closed
-        ws
-        (fn [& args]
+            (log/info connection-id "Closing connection ... Total number of connections:" conns))
           (log/info connection-id "Closing remote ...")
           (try
             @(http/get (str/replace endpoint #"^ws" "http") {:headers (assoc headers :destroy-connection "true")})
             (log/info connection-id "Closing remote ... OK!")
             (catch Throwable t
               (log/warn connection-id "Closing remote failed:" (ex-message t))))
-          (s/close! local-sock)))
-      (s/connect ws local-sock)
-      (s/connect local-sock ws))))
+          (s/close! ws)))
+
+      (s/consume
+        (fn [chunk]
+          (s/put! local-sock chunk))
+        ws)
+
+      (s/consume
+        (fn [chunk]
+          (s/put! ws chunk))
+        local-sock))))
 
 (defn make-server [{:keys [bind]
                     :as   opts}

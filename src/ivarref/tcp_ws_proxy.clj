@@ -7,15 +7,19 @@
             [clojure.string :as str]
             [clojure.java.io :as io])
   (:import (java.net InetSocketAddress)
-           (java.io File)))
+           (java.io File)
+           (java.util UUID)))
 
 (defonce num-connections (atom 0))
 
 (defn handler [{:keys [endpoint secret-header secret-file remote-host remote-port]} local-sock]
   (log/info "Creating tunnel to" (str remote-host ":" remote-port) "...")
-  (let [ws @(http/websocket-client endpoint {:headers {secret-header (str/trim (slurp secret-file))
-                                                       "remote-host" (str remote-host)
-                                                       "remote-port" (str remote-port)}})]
+  (let [connection-id (str (UUID/randomUUID))
+        headers {secret-header   (str/trim (slurp secret-file))
+                 "connection-id" connection-id
+                 "remote-host"   (str remote-host)
+                 "remote-port"   (str remote-port)}
+        ws @(http/websocket-client endpoint {:headers headers})]
     (let [conns (swap! num-connections inc)]
       (log/info "Creating tunnel to" (str remote-host ":" remote-port) "... OK! Total number of connections:" conns))
     (s/on-closed
@@ -28,6 +32,12 @@
       ws
       (fn [& args]
         (log/info "WebSocket closed.")
+        (log/info "Closing remote ...")
+        (try
+          @(http/get (str/replace endpoint #"^ws" "http") {:headers (assoc headers :destroy-connection "true")})
+          (log/info "Closing remote ... OK!")
+          (catch Throwable t
+            (log/warn t "Closing remote failed")))
         (s/close! local-sock)))
     (s/connect ws local-sock)
     (s/connect local-sock ws)))
